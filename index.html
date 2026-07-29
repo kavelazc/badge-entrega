@@ -143,7 +143,7 @@
       <div class="step-sub">Lee con atención antes de firmar.</div>
       <div class="agreement-box">
         <h2>CARTA ENTREGA - RECEPCIÓN DE BADGE</h2>
-        <p>Por medio de la presente, hago constar que el Área de <strong>Loss Prevention</strong> de Mercado Libre, me hizo entrega de <strong>01 credencial/Badge</strong> en reposición por el extravío/dañado del siguiente personal que está laborando y fue contratado por medio de la Agencia <strong>Adecco</strong>. A continuación se explicará la función de las credenciales:</p>
+        <p>Por medio de la presente, hago constar que el Área de <strong>Loss Prevention</strong> de Mercado Libre, me hizo entrega de <strong>01 credencial/Badge</strong> en reposición por el extravío/dañado del siguiente personal que está laborando y fue contratado por medio de la Agencia. A continuación se explicará la función de las credenciales:</p>
         <p class="section-title">Funciones de la credencial:</p>
         <ol>
           <li>Será su llave de acceso y salida del site.</li>
@@ -211,7 +211,7 @@
 <script>
 // ─────────────────────────────────────────────────────────────────
 // PASO 1: Pega tu API key de Anthropic aquí (entre las comillas)
-const ANTHROPIC_API_KEY = "$2a$10$yBbW/am6SN430TkfrE7sFeKGmQvLgH9M56ZIBWA7Cn5s.AjVoH.7G";
+const ANTHROPIC_API_KEY = "$2a$10$5401UsqyLaB3X6hPH5ZET.R3FIohyXF57CEbFPNjPpBqsq/eGkQwm";
 //
 // PASO 2: No toques nada más, guarda el archivo y súbelo a GitHub
 // ─────────────────────────────────────────────────────────────────
@@ -456,7 +456,7 @@ async function generarPDF() {
     let y = 30;
     doc.setFontSize(12); doc.setFont("helvetica","bold");
     doc.text("CARTA ENTREGA - RECEPCIÓN DE BADGE", pw/2, y, {align:"center"}); y += 8;
-    y = addText("Por medio de la presente, hago constar que el Área de Loss Prevention de Mercado Libre, me hizo entrega de 01 credencial/Badge en reposición por el extravío/dañado del siguiente personal que está laborando y fue contratado por medio de la Agencia Adecco.", false, 9, 0, y);
+    y = addText("Por medio de la presente, hago constar que el Área de Loss Prevention de Mercado Libre, me hizo entrega de 01 credencial/Badge en reposición por el extravío/dañado del siguiente personal que está laborando y fue contratado por medio de la Agencia.", false, 9, 0, y);
     y = addText("Funciones de la credencial:", true, 9, 0, y);
     for (const t of ["1. Será su llave de acceso y salida del site.","2. Deberá pasar la tarjeta cada vez que salga y regrese al FC.","3. En caso de extravío contactar a Loss Prevention.","4. Se realizará un cobro en caso de requerir una reposición."]) y = addText(t, false, 9, 4, y);
     y = addText("Cuidados del Badge", true, 9, 0, y);
