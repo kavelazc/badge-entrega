@@ -262,17 +262,34 @@ async function cloudLoad() {
 }
 
 async function cloudSave() {
-  localStorage.setItem(BIN_KEY, JSON.stringify(records));
   try {
-    if (!BIN_ID) await crearBin();
-    if (BIN_ID) {
-      await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json", "X-Master-Key": ANTHROPIC_API_KEY },
-        body: JSON.stringify(records)
-      });
+    // 1. Primero cargar lo que hay en la nube
+    let cloudRecords = [];
+    const res = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, {
+      headers: { "X-Master-Key": ANTHROPIC_API_KEY, "X-Bin-Meta": "false" }
+    });
+    if (res.ok) {
+      const data = await res.json();
+      cloudRecords = data.record || [];
     }
-  } catch(e) {}
+
+    // 2. Fusionar: el registro más reciente (records[0]) va primero, evitar duplicados por fecha
+    const fechasCloud = new Set(cloudRecords.map(r => r.fecha + r.nombre));
+    const nuevos = records.filter(r => !fechasCloud.has(r.fecha + r.nombre));
+    const merged = [...nuevos, ...cloudRecords];
+
+    // 3. Guardar fusionado
+    await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", "X-Master-Key": ANTHROPIC_API_KEY },
+      body: JSON.stringify(merged)
+    });
+
+    records = merged;
+    localStorage.setItem(BIN_KEY, JSON.stringify(records));
+  } catch(e) {
+    localStorage.setItem(BIN_KEY, JSON.stringify(records));
+  }
 }
 
 async function crearBin() {
