@@ -243,26 +243,18 @@ async function cloudLoad() {
 async function cloudAddRecord(newRecord) {
   showStatus("Guardando…");
   try {
-    // 1. Leer historial actual
-    const res = await fetch(SCRIPT_URL, { method: "GET", mode: "no-cors" });
+    // 1. Leer historial actual de la nube
+    const res = await fetch(SCRIPT_URL + "?t=" + Date.now());
     let current = [];
-    try {
-      const getRes = await fetch(SCRIPT_URL + "?t=" + Date.now());
-      const data = await getRes.json();
+    if (res.ok) {
+      const data = await res.json();
       current = Array.isArray(data) ? data : [];
-    } catch(e) {
-      const local = localStorage.getItem(BIN_KEY);
-      if (local) current = JSON.parse(local);
     }
-    // 2. Agregar nuevo registro al inicio
+    // 2. Agregar nuevo al inicio
     const merged = [newRecord, ...current];
-    // 3. Guardar via form POST (evita preflight CORS)
-    const form = new FormData();
-    form.append("data", JSON.stringify(merged));
-    await fetch(SCRIPT_URL, {
-      method: "POST",
-      body: form
-    });
+    // 3. Guardar via GET con parametro save (evita CORS de POST)
+    const encoded = encodeURIComponent(JSON.stringify(merged));
+    await fetch(SCRIPT_URL + "?save=" + encoded);
     records = merged;
     localStorage.setItem(BIN_KEY, JSON.stringify(records));
   } catch(e) {
@@ -274,12 +266,8 @@ async function cloudAddRecord(newRecord) {
 
 async function cloudSave() {
   try {
-    const form = new FormData();
-    form.append("data", JSON.stringify(records));
-    await fetch(SCRIPT_URL, {
-      method: "POST",
-      body: form
-    });
+    const encoded = encodeURIComponent(JSON.stringify(records));
+    await fetch(SCRIPT_URL + "?save=" + encoded);
     localStorage.setItem(BIN_KEY, JSON.stringify(records));
   } catch(e) {
     localStorage.setItem(BIN_KEY, JSON.stringify(records));
