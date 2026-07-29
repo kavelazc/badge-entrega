@@ -231,76 +231,68 @@ let ctx = null;
 // Usamos JSONBin.io como storage real (gratis, sin CORS)
 // La API key de arriba se usa solo para identificar tu bin único
 
-async function cloudLoad() {
-  showStatus("Cargando historial…");
-  try {
-    // Usamos localStorage como cache + JSONBin para sincronización
-    const local = localStorage.getItem(BIN_KEY);
-    if (local) records = JSON.parse(local);
+// ID fijo del bin — se crea la primera vez y queda guardado aquí
+let BIN_ID = "6a6a27c3da38895dfea074d0";
+localStorage.setItem(BIN_KEY + "-id", BIN_ID);
 
-    // Intentar cargar desde JSONBin si hay API key configurada
-    if (ANTHROPIC_API_KEY !== "TU_API_KEY_AQUI") {
-      const binId = await getBinId();
-      if (binId) {
-        const res = await fetch(`https://api.jsonbin.io/v3/b/${binId}/latest`, {
-          headers: { "X-Master-Key": ANTHROPIC_API_KEY }
-        });
-        if (res.ok) {
-          const data = await res.json();
-          records = data.record.records || [];
-          localStorage.setItem(BIN_KEY, JSON.stringify(records));
-        }
+async function cloudLoad() {
+  showStatus("Sincronizando historial…");
+  try {
+    if (!BIN_ID) {
+      // Intentar crear bin nuevo
+      await crearBin();
+    }
+    if (BIN_ID) {
+      const res = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, {
+        headers: { "X-Master-Key": ANTHROPIC_API_KEY, "X-Bin-Meta": "false" }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        records = data.record || [];
+        localStorage.setItem(BIN_KEY, JSON.stringify(records));
       }
     }
     hideStatus();
     updateCount();
+    renderHistory();
   } catch(e) {
     hideStatus();
+    renderHistory();
   }
 }
 
 async function cloudSave() {
   localStorage.setItem(BIN_KEY, JSON.stringify(records));
-  if (ANTHROPIC_API_KEY === "TU_API_KEY_AQUI") return;
   try {
-    const binId = await getBinId();
-    if (binId) {
-      await fetch(`https://api.jsonbin.io/v3/b/${binId}`, {
+    if (!BIN_ID) await crearBin();
+    if (BIN_ID) {
+      await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", "X-Master-Key": ANTHROPIC_API_KEY },
-        body: JSON.stringify({ records })
+        body: JSON.stringify(records)
       });
-    } else {
-      // Crear nuevo bin
-      const res = await fetch("https://api.jsonbin.io/v3/b", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Master-Key": ANTHROPIC_API_KEY, "X-Bin-Name": BIN_KEY, "X-Bin-Private": "false" },
-        body: JSON.stringify({ records })
-      });
-      if (res.ok) {
-        const data = await res.json();
-        localStorage.setItem(BIN_KEY + "-id", data.metadata.id);
-      }
     }
   } catch(e) {}
 }
 
-async function getBinId() {
-  const cached = localStorage.getItem(BIN_KEY + "-id");
-  if (cached) return cached;
+async function crearBin() {
   try {
-    const res = await fetch(`https://api.jsonbin.io/v3/b?name=${BIN_KEY}`, {
-      headers: { "X-Master-Key": ANTHROPIC_API_KEY }
+    const res = await fetch("https://api.jsonbin.io/v3/b", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Master-Key": ANTHROPIC_API_KEY,
+        "X-Bin-Name": BIN_KEY,
+        "X-Bin-Private": "false"
+      },
+      body: JSON.stringify([])
     });
     if (res.ok) {
       const data = await res.json();
-      if (data && data.length > 0) {
-        localStorage.setItem(BIN_KEY + "-id", data[0].record._id);
-        return data[0].record._id;
-      }
+      BIN_ID = data.metadata.id;
+      localStorage.setItem(BIN_KEY + "-id", BIN_ID);
     }
   } catch(e) {}
-  return null;
 }
 
 function showStatus(msg, error = false) {
