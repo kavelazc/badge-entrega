@@ -227,89 +227,69 @@ let isDrawing = false;
 let lastX = 0, lastY = 0;
 let ctx = null;
 
-// ── CLOUD STORAGE via Anthropic API ───────────────────────────────
-// Usamos JSONBin.io como storage real (gratis, sin CORS)
-// La API key de arriba se usa solo para identificar tu bin único
+// ── CLOUD STORAGE via JSONBin ─────────────────────────────────────
 
-// ID fijo del bin — se crea la primera vez y queda guardado aquí
-let BIN_ID = "6a6a27c3da38895dfea074d0";
-localStorage.setItem(BIN_KEY + "-id", BIN_ID);
+const BIN_ID = "6a6a27c3da38895dfea074d0";
 
+// Cargar historial desde la nube
 async function cloudLoad() {
-  showStatus("Sincronizando historial…");
+  showStatus("Cargando historial…");
   try {
-    if (!BIN_ID) {
-      // Intentar crear bin nuevo
-      await crearBin();
+    const res = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, {
+      headers: { "X-Master-Key": ANTHROPIC_API_KEY, "X-Bin-Meta": "false" }
+    });
+    if (res.ok) {
+      const data = await res.json();
+      records = Array.isArray(data.record) ? data.record : [];
+      localStorage.setItem(BIN_KEY, JSON.stringify(records));
     }
-    if (BIN_ID) {
-      const res = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, {
-        headers: { "X-Master-Key": ANTHROPIC_API_KEY, "X-Bin-Meta": "false" }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        records = data.record || [];
-        localStorage.setItem(BIN_KEY, JSON.stringify(records));
-      }
-    }
-    hideStatus();
-    updateCount();
-    renderHistory();
-  } catch(e) {
-    hideStatus();
-    renderHistory();
-  }
+  } catch(e) {}
+  hideStatus();
+  updateCount();
+  renderHistory();
 }
 
-async function cloudSave() {
+// Guardar UN registro nuevo SIN borrar los anteriores
+async function cloudAddRecord(newRecord) {
   try {
-    // 1. Primero cargar lo que hay en la nube
+    // 1. Bajar historial actual de la nube
     let cloudRecords = [];
     const res = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, {
       headers: { "X-Master-Key": ANTHROPIC_API_KEY, "X-Bin-Meta": "false" }
     });
     if (res.ok) {
       const data = await res.json();
-      cloudRecords = data.record || [];
+      cloudRecords = Array.isArray(data.record) ? data.record : [];
     }
-
-    // 2. Fusionar: el registro más reciente (records[0]) va primero, evitar duplicados por fecha
-    const fechasCloud = new Set(cloudRecords.map(r => r.fecha + r.nombre));
-    const nuevos = records.filter(r => !fechasCloud.has(r.fecha + r.nombre));
-    const merged = [...nuevos, ...cloudRecords];
-
-    // 3. Guardar fusionado
+    // 2. Agregar el nuevo al inicio
+    const merged = [newRecord, ...cloudRecords];
+    // 3. Subir historial completo
     await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json", "X-Master-Key": ANTHROPIC_API_KEY },
       body: JSON.stringify(merged)
     });
-
     records = merged;
     localStorage.setItem(BIN_KEY, JSON.stringify(records));
   } catch(e) {
+    // fallback local
+    records = [newRecord, ...records];
     localStorage.setItem(BIN_KEY, JSON.stringify(records));
   }
 }
 
-async function crearBin() {
+// Guardar historial completo (para eliminar registros o limpiar)
+async function cloudSave() {
   try {
-    const res = await fetch("https://api.jsonbin.io/v3/b", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Master-Key": ANTHROPIC_API_KEY,
-        "X-Bin-Name": BIN_KEY,
-        "X-Bin-Private": "false"
-      },
-      body: JSON.stringify([])
+    await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", "X-Master-Key": ANTHROPIC_API_KEY },
+      body: JSON.stringify(records)
     });
-    if (res.ok) {
-      const data = await res.json();
-      BIN_ID = data.metadata.id;
-      localStorage.setItem(BIN_KEY + "-id", BIN_ID);
-    }
-  } catch(e) {}
+    localStorage.setItem(BIN_KEY, JSON.stringify(records));
+  } catch(e) {
+    localStorage.setItem(BIN_KEY, JSON.stringify(records));
+  }
 }
 
 function showStatus(msg, error = false) {
@@ -419,8 +399,7 @@ async function submitFirma() {
   document.getElementById("btn-submit").disabled = true;
   document.getElementById("btn-submit").textContent = "Guardando…";
 
-  records.unshift(record);
-  await cloudSave();
+  await cloudAddRecord(record);
   updateCount();
 
   document.getElementById("step3").style.display = "none";
