@@ -209,15 +209,7 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>
-// ─────────────────────────────────────────────────────────────────
-// PASO 1: Pega tu API key de Anthropic aquí (entre las comillas)
-const ANTHROPIC_API_KEY = "$2a$10$5401UsqyLaB3X6hPH5ZET.R3FIohyXF57CEbFPNjPpBqsq/eGkQwm";
 //
-// PASO 2: No toques nada más, guarda el archivo y súbelo a GitHub
-// ─────────────────────────────────────────────────────────────────
-
-// Usamos un servidor proxy público para evitar CORS con la API de Anthropic
-// Los datos se guardan como "memorias" codificadas en base64
 const BIN_KEY = "badge-entrega-ml-v1";
 
 let records = [];
@@ -227,70 +219,63 @@ let isDrawing = false;
 let lastX = 0, lastY = 0;
 let ctx = null;
 
-// ── CLOUD STORAGE via JSONBin ─────────────────────────────────────
-const BIN_ID = "6a6a27c3da38895dfea074d0";
-const HEADERS_READ  = { "X-Master-Key": ANTHROPIC_API_KEY, "X-Bin-Meta": "false" };
-const HEADERS_WRITE = { "Content-Type": "application/json", "X-Master-Key": ANTHROPIC_API_KEY };
-const URL_BIN = `https://api.jsonbin.io/v3/b/${BIN_ID}`;
+// ── CLOUD STORAGE via Google Sheets ──────────────────────────────
+const SCRIPT_URL = "https://script.google.com/a/macros/mercadolibre.com.mx/s/AKfycbxXeri0WuzwCO4ivnWIxmH-iUlpevaosrmsEz0S7i4UO2N7LjAkUFAg5tadF4812o2u/exec";
 
-// Leer bin crudo desde JSONBin
-async function binRead() {
-  const res = await fetch(URL_BIN + "/latest", { headers: HEADERS_READ });
-  if (!res.ok) throw new Error("read failed " + res.status);
-  const data = await res.json();
-  // JSONBin envuelve en { record: ... }
-  const r = data.record;
-  return Array.isArray(r) ? r : (Array.isArray(r.records) ? r.records : []);
-}
-
-// Escribir bin completo en JSONBin
-async function binWrite(arr) {
-  const res = await fetch(URL_BIN, {
-    method: "PUT",
-    headers: HEADERS_WRITE,
-    body: JSON.stringify(arr)
-  });
-  if (!res.ok) throw new Error("write failed " + res.status);
-}
-
-// Cargar historial al abrir pestaña historial o al refrescar
 async function cloudLoad() {
-  showStatus("Sincronizando…");
+  showStatus("Sincronizando historial…");
   try {
-    const cloud = await binRead();
-    records = cloud;
-    localStorage.setItem(BIN_KEY, JSON.stringify(records));
+    const res = await fetch(SCRIPT_URL, { method: "GET", mode: "cors" });
+    if (res.ok) {
+      const data = await res.json();
+      records = Array.isArray(data) ? data : [];
+      localStorage.setItem(BIN_KEY, JSON.stringify(records));
+    }
   } catch(e) {
-    // Si falla la nube, usar localStorage como respaldo
     const local = localStorage.getItem(BIN_KEY);
-    if (local) records = JSON.parse(local);
+    if (local) try { records = JSON.parse(local); } catch(e2) {}
   }
   hideStatus();
   updateCount();
   renderHistory();
 }
 
-// Agregar UN registro nuevo — lee primero, agrega, escribe
 async function cloudAddRecord(newRecord) {
   showStatus("Guardando…");
   try {
-    const cloud = await binRead();          // leer estado actual
-    const merged = [newRecord, ...cloud];   // agregar al inicio
-    await binWrite(merged);                 // escribir de vuelta
+    // 1. Leer historial actual
+    const res = await fetch(SCRIPT_URL, { method: "GET", mode: "cors" });
+    let current = [];
+    if (res.ok) {
+      const data = await res.json();
+      current = Array.isArray(data) ? data : [];
+    }
+    // 2. Agregar nuevo registro al inicio
+    const merged = [newRecord, ...current];
+    // 3. Guardar historial completo
+    await fetch(SCRIPT_URL, {
+      method: "POST",
+      mode: "cors",
+      headers: { "Content-Type": "text/plain" },
+      body: JSON.stringify(merged)
+    });
     records = merged;
     localStorage.setItem(BIN_KEY, JSON.stringify(records));
   } catch(e) {
-    // fallback: guardar solo en local
     records = [newRecord, ...records];
     localStorage.setItem(BIN_KEY, JSON.stringify(records));
   }
   hideStatus();
 }
 
-// Guardar historial completo (tras eliminar o limpiar PDF)
 async function cloudSave() {
   try {
-    await binWrite(records);
+    await fetch(SCRIPT_URL, {
+      method: "POST",
+      mode: "cors",
+      headers: { "Content-Type": "text/plain" },
+      body: JSON.stringify(records)
+    });
     localStorage.setItem(BIN_KEY, JSON.stringify(records));
   } catch(e) {
     localStorage.setItem(BIN_KEY, JSON.stringify(records));
@@ -558,19 +543,20 @@ async function confirmDel(i) { records.splice(i,1); await cloudSave(); updateCou
 const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
 if (isIOS && !window.navigator.standalone) document.getElementById("install-hint").style.display = "flex";
 
-// Init — cargar desde localStorage primero (respaldo rápido), luego sincronizar con nube
-(async () => {
-  try { const l = localStorage.getItem(BIN_KEY); if (l) records = JSON.parse(l); } catch(e) {}
-  updateCount();
-  renderDots();
-  // Pre-cargar historial de la nube en segundo plano
-  try {
-    const cloud = await binRead();
-    records = cloud;
-    localStorage.setItem(BIN_KEY, JSON.stringify(records));
-    updateCount();
-  } catch(e) {}
-})();
+// Init — cargar localStorage primero, luego sincronizar con Sheets en segundo plano
+try { const l = localStorage.getItem(BIN_KEY); if (l) records = JSON.parse(l); } catch(e) {}
+updateCount();
+renderDots();
+// Sincronizar con Google Sheets al abrir
+fetch(SCRIPT_URL, { method: "GET", mode: "cors" })
+  .then(r => r.json())
+  .then(data => {
+    if (Array.isArray(data)) {
+      records = data;
+      localStorage.setItem(BIN_KEY, JSON.stringify(records));
+      updateCount();
+    }
+  }).catch(() => {});
 </script>
 </body>
 </html>
