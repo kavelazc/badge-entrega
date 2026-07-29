@@ -303,13 +303,19 @@ function hideStatus() {
 }
 
 // ── TABS ──────────────────────────────────────────────────────────
-function switchTab(tab) {
+function switchTab(tab, skipReload = false) {
   document.getElementById("panel-firma").style.display = tab === "firma" ? "block" : "none";
   document.getElementById("panel-historial").style.display = tab === "historial" ? "block" : "none";
   document.getElementById("tab-firma").className = "tab" + (tab === "firma" ? " active" : "");
   document.getElementById("tab-historial").className = "tab" + (tab === "historial" ? " active" : "");
   updateCount();
-  if (tab === "historial") { cloudLoad().then(() => renderHistory()); }
+  if (tab === "historial") {
+    if (skipReload) {
+      renderHistory(); // solo renderiza lo que ya tenemos en memoria
+    } else {
+      cloudLoad(); // descarga desde la nube
+    }
+  }
 }
 
 function updateCount() {
@@ -410,7 +416,7 @@ async function submitFirma() {
     document.getElementById("inp-badge").value = "";
     sigHasContent = false; currentStep = 1;
     document.getElementById("step-done").style.display = "none";
-    goStep(1); switchTab("historial");
+    goStep(1); switchTab("historial", true);
   }, 2200);
 }
 
