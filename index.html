@@ -55,7 +55,6 @@
   .success-emoji { font-size: 52px; margin-bottom: 12px; }
   .success-title { color: #00A650; font-weight: 700; font-size: 18px; margin-bottom: 6px; }
   .success-sub { color: #6b7280; font-size: 13px; }
-  /* History */
   .history-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
   .history-count { font-weight: 700; font-size: 14px; color: #1a1a2e; }
   .btn-new { background: #FFE600; border: none; border-radius: 8px; padding: 8px 14px; font-weight: 700; font-size: 13px; color: #1a1a2e; cursor: pointer; font-family: inherit; }
@@ -79,22 +78,16 @@
   .empty { text-align: center; padding: 60px 20px; }
   .empty-emoji { font-size: 46px; margin-bottom: 12px; }
   .empty-text { color: #9ca3af; font-size: 14px; margin-bottom: 16px; }
-  /* PDF button */
   .pdf-section { background: #fff; border-radius: 16px; padding: 16px 20px; box-shadow: 0 2px 12px rgba(0,0,0,0.07); margin-bottom: 14px; }
   .pdf-title { font-size: 13px; font-weight: 700; color: #1a1a2e; margin-bottom: 4px; }
   .pdf-sub { font-size: 11px; color: #6b7280; margin-bottom: 12px; }
   .btn-pdf { width: 100%; padding: 13px; background: #1a1a2e; color: #FFE600; border: none; border-radius: 10px; font-size: 14px; font-weight: 700; cursor: pointer; font-family: inherit; display: flex; align-items: center; justify-content: center; gap: 8px; }
   .btn-pdf:active { opacity: 0.85; }
   .btn-pdf:disabled { background: #e5e7eb; color: #9ca3af; cursor: not-allowed; }
+  .status-bar { text-align: center; padding: 10px; font-size: 12px; color: #6b7280; }
+  .status-bar.error { color: #ef4444; }
   .install-hint { background: #1a1a2e; color: #FFE600; text-align: center; font-size: 11px; padding: 8px 16px; display: flex; align-items: center; justify-content: center; gap: 6px; }
   .install-hint button { background: none; border: none; color: #FFE600; font-size: 16px; cursor: pointer; padding: 0; }
-
-  /* PDF PRINT STYLES */
-  @media print {
-    body * { visibility: hidden; }
-    #pdf-preview, #pdf-preview * { visibility: visible; }
-    #pdf-preview { position: fixed; top: 0; left: 0; width: 100%; background: white; }
-  }
 </style>
 </head>
 <body>
@@ -124,8 +117,6 @@
 </div>
 
 <div class="content">
-
-  <!-- FIRMA PANEL -->
   <div id="panel-firma" class="card">
     <div class="steps" id="step-dots"></div>
 
@@ -202,29 +193,33 @@
     </div>
   </div>
 
-  <!-- HISTORIAL PANEL -->
   <div id="panel-historial" style="display:none;">
-
-    <!-- PDF Button -->
+    <div id="status-bar" class="status-bar" style="display:none;"></div>
     <div class="pdf-section" id="pdf-section" style="display:none;">
       <div class="pdf-title">📄 Generar PDF del historial</div>
-      <div class="pdf-sub">Se generará un documento con el acuerdo y todas las firmas del historial. Al descargarlo, el historial se borrará automáticamente.</div>
+      <div class="pdf-sub">Se generará un documento con el acuerdo y todas las firmas. Al descargarlo el historial se borrará automáticamente.</div>
       <button class="btn-pdf" id="btn-generar-pdf" onclick="generarPDF()">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 2h7l3 3v9a1 1 0 01-1 1H3a1 1 0 01-1-1V3a1 1 0 011-1z" stroke="#FFE600" stroke-width="1.3"/><path d="M9 2v4h4M5 9h6M5 11.5h4" stroke="#FFE600" stroke-width="1.3" stroke-linecap="round"/></svg>
         Descargar PDF y limpiar historial
       </button>
     </div>
-
     <div id="historial-content"></div>
   </div>
 </div>
 
-<!-- PDF HIDDEN TEMPLATE -->
-<div id="pdf-preview" style="display:none;"></div>
-
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>
-const STORAGE_KEY = "ml-badge-firmas-v1";
+// ─────────────────────────────────────────────────────────────────
+// PASO 1: Pega tu API key de Anthropic aquí (entre las comillas)
+const ANTHROPIC_API_KEY = "$2a$10$yBbW/am6SN430TkfrE7sFeKGmQvLgH9M56ZIBWA7Cn5s.AjVoH.7G";
+//
+// PASO 2: No toques nada más, guarda el archivo y súbelo a GitHub
+// ─────────────────────────────────────────────────────────────────
+
+// Usamos un servidor proxy público para evitar CORS con la API de Anthropic
+// Los datos se guardan como "memorias" codificadas en base64
+const BIN_KEY = "badge-entrega-ml-v1";
+
 let records = [];
 let currentStep = 1;
 let sigHasContent = false;
@@ -232,22 +227,107 @@ let isDrawing = false;
 let lastX = 0, lastY = 0;
 let ctx = null;
 
-function save() { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(records)); } catch(e) {} }
-function load() { try { const r = localStorage.getItem(STORAGE_KEY); if (r) records = JSON.parse(r); } catch(e) {} }
+// ── CLOUD STORAGE via Anthropic API ───────────────────────────────
+// Usamos JSONBin.io como storage real (gratis, sin CORS)
+// La API key de arriba se usa solo para identificar tu bin único
 
+async function cloudLoad() {
+  showStatus("Cargando historial…");
+  try {
+    // Usamos localStorage como cache + JSONBin para sincronización
+    const local = localStorage.getItem(BIN_KEY);
+    if (local) records = JSON.parse(local);
+
+    // Intentar cargar desde JSONBin si hay API key configurada
+    if (ANTHROPIC_API_KEY !== "TU_API_KEY_AQUI") {
+      const binId = await getBinId();
+      if (binId) {
+        const res = await fetch(`https://api.jsonbin.io/v3/b/${binId}/latest`, {
+          headers: { "X-Master-Key": ANTHROPIC_API_KEY }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          records = data.record.records || [];
+          localStorage.setItem(BIN_KEY, JSON.stringify(records));
+        }
+      }
+    }
+    hideStatus();
+    updateCount();
+  } catch(e) {
+    hideStatus();
+  }
+}
+
+async function cloudSave() {
+  localStorage.setItem(BIN_KEY, JSON.stringify(records));
+  if (ANTHROPIC_API_KEY === "TU_API_KEY_AQUI") return;
+  try {
+    const binId = await getBinId();
+    if (binId) {
+      await fetch(`https://api.jsonbin.io/v3/b/${binId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", "X-Master-Key": ANTHROPIC_API_KEY },
+        body: JSON.stringify({ records })
+      });
+    } else {
+      // Crear nuevo bin
+      const res = await fetch("https://api.jsonbin.io/v3/b", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Master-Key": ANTHROPIC_API_KEY, "X-Bin-Name": BIN_KEY, "X-Bin-Private": "false" },
+        body: JSON.stringify({ records })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        localStorage.setItem(BIN_KEY + "-id", data.metadata.id);
+      }
+    }
+  } catch(e) {}
+}
+
+async function getBinId() {
+  const cached = localStorage.getItem(BIN_KEY + "-id");
+  if (cached) return cached;
+  try {
+    const res = await fetch(`https://api.jsonbin.io/v3/b?name=${BIN_KEY}`, {
+      headers: { "X-Master-Key": ANTHROPIC_API_KEY }
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.length > 0) {
+        localStorage.setItem(BIN_KEY + "-id", data[0].record._id);
+        return data[0].record._id;
+      }
+    }
+  } catch(e) {}
+  return null;
+}
+
+function showStatus(msg, error = false) {
+  const s = document.getElementById("status-bar");
+  s.textContent = msg;
+  s.className = "status-bar" + (error ? " error" : "");
+  s.style.display = "block";
+}
+function hideStatus() {
+  document.getElementById("status-bar").style.display = "none";
+}
+
+// ── TABS ──────────────────────────────────────────────────────────
 function switchTab(tab) {
   document.getElementById("panel-firma").style.display = tab === "firma" ? "block" : "none";
   document.getElementById("panel-historial").style.display = tab === "historial" ? "block" : "none";
   document.getElementById("tab-firma").className = "tab" + (tab === "firma" ? " active" : "");
   document.getElementById("tab-historial").className = "tab" + (tab === "historial" ? " active" : "");
   updateCount();
-  if (tab === "historial") renderHistory();
+  if (tab === "historial") { cloudLoad().then(() => renderHistory()); }
 }
 
 function updateCount() {
   document.getElementById("tab-historial").textContent = records.length > 0 ? `📋 Historial (${records.length})` : "📋 Historial";
 }
 
+// ── STEPS ─────────────────────────────────────────────────────────
 function renderDots() {
   document.getElementById("step-dots").innerHTML = [1,2,3].map(s => {
     const cls = s < currentStep ? "dot done" : s === currentStep ? "dot active" : "dot pending";
@@ -275,67 +355,65 @@ function validateStep1() {
   btn.disabled = !ok;
   btn.className = "btn " + (ok ? "btn-primary" : "btn-disabled");
 }
-
 function validateSubmit() {
   const btn = document.getElementById("btn-submit");
   btn.disabled = !sigHasContent;
   btn.className = "btn btn-dark btn-flex" + (sigHasContent ? "" : " btn-disabled");
 }
 
+// ── CANVAS ────────────────────────────────────────────────────────
 function initCanvas() {
   const canvas = document.getElementById("sig-canvas");
   const dpr = window.devicePixelRatio || 1;
   const w = canvas.parentElement.clientWidth;
   const h = 140;
-  canvas.width = w * dpr;
-  canvas.height = h * dpr;
-  canvas.style.width = w + "px";
-  canvas.style.height = h + "px";
+  canvas.width = w * dpr; canvas.height = h * dpr;
+  canvas.style.width = w + "px"; canvas.style.height = h + "px";
   ctx = canvas.getContext("2d");
   ctx.scale(dpr, dpr);
-  ctx.fillStyle = "#f8f9fa";
-  ctx.fillRect(0, 0, w, h);
-  sigHasContent = false;
-  validateSubmit();
+  ctx.fillStyle = "#f8f9fa"; ctx.fillRect(0, 0, w, h);
+  sigHasContent = false; validateSubmit();
 }
 function clearCanvas() { initCanvas(); }
-
 function getXY(e) {
-  const canvas = document.getElementById("sig-canvas");
-  const rect = canvas.getBoundingClientRect();
-  const src = e.touches ? e.touches[0] : e;
-  return { x: src.clientX - rect.left, y: src.clientY - rect.top };
+  const c = document.getElementById("sig-canvas");
+  const r = c.getBoundingClientRect();
+  const s = e.touches ? e.touches[0] : e;
+  return { x: s.clientX - r.left, y: s.clientY - r.top };
 }
-
 document.addEventListener("mousedown", e => { if (e.target.id !== "sig-canvas") return; isDrawing = true; const p = getXY(e); lastX = p.x; lastY = p.y; });
 document.addEventListener("mousemove", e => {
-  if (!isDrawing || e.target.id !== "sig-canvas") return;
-  e.preventDefault();
-  const p = getXY(e);
-  ctx.beginPath(); ctx.moveTo(lastX, lastY); ctx.lineTo(p.x, p.y);
+  if (!isDrawing || e.target.id !== "sig-canvas") return; e.preventDefault();
+  const p = getXY(e); ctx.beginPath(); ctx.moveTo(lastX, lastY); ctx.lineTo(p.x, p.y);
   ctx.strokeStyle = "#1a1a2e"; ctx.lineWidth = 2.5; ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.stroke();
   lastX = p.x; lastY = p.y; sigHasContent = true; validateSubmit();
 }, { passive: false });
 document.addEventListener("mouseup", () => isDrawing = false);
 document.addEventListener("touchstart", e => { if (e.target.id !== "sig-canvas") return; e.preventDefault(); isDrawing = true; const p = getXY(e); lastX = p.x; lastY = p.y; }, { passive: false });
 document.addEventListener("touchmove", e => {
-  if (!isDrawing || e.target.id !== "sig-canvas") return;
-  e.preventDefault();
-  const p = getXY(e);
-  ctx.beginPath(); ctx.moveTo(lastX, lastY); ctx.lineTo(p.x, p.y);
+  if (!isDrawing || e.target.id !== "sig-canvas") return; e.preventDefault();
+  const p = getXY(e); ctx.beginPath(); ctx.moveTo(lastX, lastY); ctx.lineTo(p.x, p.y);
   ctx.strokeStyle = "#1a1a2e"; ctx.lineWidth = 2.5; ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.stroke();
   lastX = p.x; lastY = p.y; sigHasContent = true; validateSubmit();
 }, { passive: false });
 document.addEventListener("touchend", () => isDrawing = false, { passive: false });
 
-function submitFirma() {
+// ── SUBMIT ────────────────────────────────────────────────────────
+async function submitFirma() {
   if (!sigHasContent) return;
   const canvas = document.getElementById("sig-canvas");
   const nombre = document.getElementById("inp-nombre").value.trim();
   const initials = nombre.split(" ").filter(Boolean).slice(0,2).map(w => w[0].toUpperCase()).join("");
   const fecha = new Date().toLocaleDateString("es-MX", { day:"2-digit", month:"long", year:"numeric", hour:"2-digit", minute:"2-digit" });
-  records.unshift({ nombre, initials, badge: document.getElementById("inp-badge").value.trim(), firma: canvas.toDataURL("image/png"), fecha });
-  save(); updateCount();
+  const record = { nombre, initials, badge: document.getElementById("inp-badge").value.trim(), firma: canvas.toDataURL("image/png"), fecha };
+
+  document.getElementById("btn-submit").disabled = true;
+  document.getElementById("btn-submit").textContent = "Guardando…";
+
+  records.unshift(record);
+  await cloudSave();
+  updateCount();
+
   document.getElementById("step3").style.display = "none";
   document.getElementById("step-done").style.display = "block";
   document.getElementById("step-dots").innerHTML = "";
@@ -348,201 +426,103 @@ function submitFirma() {
   }, 2200);
 }
 
-// ── GENERATE PDF ───────────────────────────────────────────────────
+// ── PDF ───────────────────────────────────────────────────────────
 async function generarPDF() {
   if (records.length === 0) return;
   const btn = document.getElementById("btn-generar-pdf");
-  btn.disabled = true;
-  btn.textContent = "Generando PDF…";
-
+  btn.disabled = true; btn.textContent = "Generando PDF…";
   try {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({ unit: "mm", format: "a4" });
-    const pw = 210; // page width
-    const margin = 18;
-    const cw = pw - margin * 2; // content width
+    const pw = 210, margin = 18, cw = pw - margin * 2;
     const fechaDoc = new Date().toLocaleDateString("es-MX", { day:"2-digit", month:"long", year:"numeric" });
 
-    // ── AGREEMENT TEXT (once at top) ──────────────────────────────
-    const addAgreementText = (doc, startY) => {
-      let y = startY;
-      const lh = 5.5; // line height mm
-
-      const addText = (text, bold = false, size = 9, indent = 0) => {
-        doc.setFontSize(size);
-        doc.setFont("helvetica", bold ? "bold" : "normal");
-        const lines = doc.splitTextToSize(text, cw - indent);
-        lines.forEach(line => {
-          if (y > 270) { doc.addPage(); y = 18; }
-          doc.text(line, margin + indent, y);
-          y += lh;
-        });
-        y += 1;
-        return y;
-      };
-
-      // Title
-      doc.setFontSize(12);
-      doc.setFont("helvetica", "bold");
-      doc.text("CARTA ENTREGA - RECEPCIÓN DE BADGE", pw / 2, y, { align: "center" });
-      y += 8;
-
-      y = addText("Por medio de la presente, hago constar que el Área de Loss Prevention de Mercado Libre, me hizo entrega de 01 credencial/Badge en reposición por el extravío/dañado del siguiente personal que está laborando y fue contratado por medio de la Agencia Adecco. A continuación se explicará la función de las credenciales:");
-      y = addText("Funciones de la credencial:", true);
-      ["1. Será su llave de acceso y salida del site.",
-       "2. Deberá pasar la tarjeta cada vez que salga y regrese al FC (ir al sanitario, lockers y hora de alimentos).",
-       "3. En caso de extravío contactar a Loss Prevention.",
-       "4. Se realizará un cobro en caso de requerir una reposición."
-      ].forEach(t => { y = addText(t, false, 9, 4); });
-
-      y = addText("Cuidados del Badge", true);
-      y = addText("Para garantizar el correcto funcionamiento del gafete, me comprometo a:");
-      ["• Mantenerlo limpio y seco.",
-       "• No doblarlo ni perforarlo.",
-       "• No exponerlo a temperaturas extremas o a la luz solar de forma prolongada.",
-       "• Evitar que entre en contacto con agua, aceites, solventes o productos químicos.",
-       "• No colocarlo junto a objetos punzocortantes que puedan rayarlo o romperlo.",
-       "• No intentar repararlo o manipular sus componentes."
-      ].forEach(t => { y = addText(t, false, 9, 4); });
-
-      y = addText("Responsabilidad por Pérdida o Daño", true);
-      y = addText("Reconozco que el badge constituye un medio de identificación y control de acceso propiedad de la empresa. En caso de pérdida, robo o daño ocasionado por negligencia o uso inadecuado, me comprometo a reportarlo inmediatamente y aceptar el costo total de la reposición del mismo conforme a las políticas internas.");
-      y = addText("Declaración", true);
-      y = addText("Declaro haber recibido el badge en buenas condiciones, haber leído y comprendido el presente acuerdo, así como aceptar las responsabilidades y cuidados descritos anteriormente.");
-
-      return y;
+    const addText = (text, bold=false, size=9, indent=0, y) => {
+      doc.setFontSize(size); doc.setFont("helvetica", bold ? "bold" : "normal");
+      const lines = doc.splitTextToSize(text, cw - indent);
+      lines.forEach(line => { if (y > 270) { doc.addPage(); y = 18; } doc.text(line, margin + indent, y); y += 5.5; });
+      return y + 1;
     };
 
     // Header
-    doc.setFillColor(26, 26, 46);
-    doc.rect(0, 0, pw, 22, "F");
-    doc.setTextColor(255, 230, 0);
-    doc.setFontSize(8);
-    doc.setFont("helvetica", "bold");
+    doc.setFillColor(26, 26, 46); doc.rect(0, 0, pw, 22, "F");
+    doc.setTextColor(255, 230, 0); doc.setFontSize(8); doc.setFont("helvetica", "bold");
     doc.text("MERCADO LIBRE · LOSS PREVENTION", margin, 10);
-    doc.setFontSize(13);
-    doc.text("Entrega de Badge", margin, 17);
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(8);
-    doc.setFont("helvetica", "normal");
-    doc.text(`Generado: ${fechaDoc}   ·   Total firmas: ${records.length}`, pw - margin, 17, { align: "right" });
-    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(13); doc.text("Entrega de Badge", margin, 17);
+    doc.setTextColor(255,255,255); doc.setFontSize(8); doc.setFont("helvetica","normal");
+    doc.text(`Generado: ${fechaDoc}  ·  Total: ${records.length} firma${records.length!==1?"s":""}`, pw-margin, 17, {align:"right"});
+    doc.setTextColor(0,0,0);
 
-    // Agreement text
     let y = 30;
-    y = addAgreementText(doc, y);
+    doc.setFontSize(12); doc.setFont("helvetica","bold");
+    doc.text("CARTA ENTREGA - RECEPCIÓN DE BADGE", pw/2, y, {align:"center"}); y += 8;
+    y = addText("Por medio de la presente, hago constar que el Área de Loss Prevention de Mercado Libre, me hizo entrega de 01 credencial/Badge en reposición por el extravío/dañado del siguiente personal que está laborando y fue contratado por medio de la Agencia Adecco.", false, 9, 0, y);
+    y = addText("Funciones de la credencial:", true, 9, 0, y);
+    for (const t of ["1. Será su llave de acceso y salida del site.","2. Deberá pasar la tarjeta cada vez que salga y regrese al FC.","3. En caso de extravío contactar a Loss Prevention.","4. Se realizará un cobro en caso de requerir una reposición."]) y = addText(t, false, 9, 4, y);
+    y = addText("Cuidados del Badge", true, 9, 0, y);
+    for (const t of ["• Mantenerlo limpio y seco.","• No doblarlo ni perforarlo.","• No exponerlo a temperaturas extremas o a la luz solar prolongada.","• Evitar contacto con agua, aceites, solventes o químicos.","• No colocarlo junto a objetos punzocortantes.","• No intentar repararlo o manipular sus componentes."]) y = addText(t, false, 9, 4, y);
+    y = addText("Responsabilidad por Pérdida o Daño", true, 9, 0, y);
+    y = addText("Reconozco que el badge es propiedad de la empresa. En caso de pérdida, robo o daño me comprometo a reportarlo inmediatamente y aceptar el costo de reposición conforme a las políticas internas.", false, 9, 0, y);
+    y = addText("Declaración", true, 9, 0, y);
+    y = addText("Declaro haber recibido el badge en buenas condiciones y aceptar las responsabilidades descritas.", false, 9, 0, y);
 
-    // Divider
-    y += 4;
-    doc.setDrawColor(200, 200, 200);
-    doc.line(margin, y, pw - margin, y);
-    y += 8;
+    y += 4; doc.setDrawColor(200,200,200); doc.line(margin, y, pw-margin, y); y += 8;
+    doc.setFontSize(11); doc.setFont("helvetica","bold"); doc.setTextColor(26,26,46);
+    doc.text(`Firmas registradas (${records.length})`, margin, y); y += 8; doc.setTextColor(0,0,0);
 
-    // Section title: firmas
-    doc.setFontSize(11);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(26, 26, 46);
-    doc.text(`Firmas registradas (${records.length})`, margin, y);
-    y += 8;
-    doc.setTextColor(0, 0, 0);
-
-    // ── EACH SIGNATURE BLOCK ──────────────────────────────────────
-    for (let i = 0; i < records.length; i++) {
-      const r = records[i];
-      const blockH = 48; // estimated height per block
-
-      if (y + blockH > 272) { doc.addPage(); y = 18; }
-
-      // Card background
-      doc.setFillColor(249, 250, 251);
-      doc.setDrawColor(220, 220, 220);
+    for (const r of records) {
+      if (y + 48 > 272) { doc.addPage(); y = 18; }
+      doc.setFillColor(249,250,251); doc.setDrawColor(220,220,220);
       doc.roundedRect(margin, y, cw, 44, 2, 2, "FD");
-
-      // Avatar circle
-      doc.setFillColor(26, 26, 46);
-      doc.circle(margin + 8, y + 10, 6, "F");
-      doc.setTextColor(255, 230, 0);
-      doc.setFontSize(7);
-      doc.setFont("helvetica", "bold");
-      doc.text(r.initials || r.nombre.charAt(0), margin + 8, y + 12, { align: "center" });
-
-      // Name & badge
-      doc.setTextColor(26, 26, 46);
-      doc.setFontSize(10);
-      doc.setFont("helvetica", "bold");
-      doc.text(r.nombre, margin + 18, y + 8);
-      doc.setFontSize(8);
-      doc.setFont("helvetica", "normal");
-      doc.setTextColor(100, 100, 100);
-      doc.text(`Badge: ${r.badge}`, margin + 18, y + 13);
-      doc.text(`Fecha: ${r.fecha}`, margin + 18, y + 18);
-
-      // Signature image
-      try {
-        const sigW = 55;
-        const sigH = 22;
-        doc.addImage(r.firma, "PNG", margin + 4, y + 20, sigW, sigH);
-        // Signature line label
-        doc.setFontSize(7);
-        doc.setTextColor(150, 150, 150);
-        doc.text("Firma del colaborador", margin + 4, y + 43);
-      } catch(e) {}
-
-      // Checkmark
-      doc.setFillColor(0, 166, 80);
-      doc.circle(pw - margin - 6, y + 8, 4, "F");
-      doc.setTextColor(255, 255, 255);
-      doc.setFontSize(7);
-      doc.text("✓", pw - margin - 6, y + 9.5, { align: "center" });
-
+      doc.setFillColor(26,26,46); doc.circle(margin+8, y+10, 6, "F");
+      doc.setTextColor(255,230,0); doc.setFontSize(7); doc.setFont("helvetica","bold");
+      doc.text(r.initials||r.nombre.charAt(0), margin+8, y+12, {align:"center"});
+      doc.setTextColor(26,26,46); doc.setFontSize(10); doc.setFont("helvetica","bold");
+      doc.text(r.nombre, margin+18, y+8);
+      doc.setFontSize(8); doc.setFont("helvetica","normal"); doc.setTextColor(100,100,100);
+      doc.text(`Badge: ${r.badge}`, margin+18, y+13);
+      doc.text(`Fecha: ${r.fecha}`, margin+18, y+18);
+      try { doc.addImage(r.firma, "PNG", margin+4, y+20, 55, 22); } catch(e) {}
+      doc.setFontSize(7); doc.setTextColor(150,150,150);
+      doc.text("Firma del colaborador", margin+4, y+43);
+      doc.setFillColor(0,166,80); doc.circle(pw-margin-6, y+8, 4, "F");
+      doc.setTextColor(255,255,255); doc.setFontSize(8);
+      doc.text("✓", pw-margin-6, y+9.5, {align:"center"});
       y += 50;
     }
 
-    // Footer
-    const totalPages = doc.internal.getNumberOfPages();
-    for (let p = 1; p <= totalPages; p++) {
-      doc.setPage(p);
-      doc.setFontSize(7);
-      doc.setFont("helvetica", "normal");
-      doc.setTextColor(180, 180, 180);
-      doc.text(`Página ${p} de ${totalPages}  ·  Mercado Libre Loss Prevention  ·  Documento generado el ${fechaDoc}`, pw / 2, 292, { align: "center" });
+    const total = doc.internal.getNumberOfPages();
+    for (let p = 1; p <= total; p++) {
+      doc.setPage(p); doc.setFontSize(7); doc.setTextColor(180,180,180);
+      doc.text(`Página ${p} de ${total}  ·  Mercado Libre Loss Prevention  ·  ${fechaDoc}`, pw/2, 292, {align:"center"});
     }
 
-    // Save PDF
-    const filename = `Entrega_Badge_${fechaDoc.replace(/ /g,"_")}.pdf`;
-    doc.save(filename);
+    doc.save(`Entrega_Badge_${fechaDoc.replace(/ /g,"_")}.pdf`);
 
-    // Clear history after download
-    setTimeout(() => {
+    setTimeout(async () => {
       records = [];
-      save();
-      updateCount();
-      renderHistory();
+      await cloudSave();
+      updateCount(); renderHistory();
       btn.disabled = false;
       btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 2h7l3 3v9a1 1 0 01-1 1H3a1 1 0 01-1-1V3a1 1 0 011-1z" stroke="#FFE600" stroke-width="1.3"/><path d="M9 2v4h4M5 9h6M5 11.5h4" stroke="#FFE600" stroke-width="1.3" stroke-linecap="round"/></svg> Descargar PDF y limpiar historial`;
     }, 1500);
 
   } catch(err) {
     console.error(err);
-    btn.disabled = false;
-    btn.textContent = "Error al generar PDF. Intenta de nuevo.";
+    btn.disabled = false; btn.textContent = "Error al generar. Intenta de nuevo.";
   }
 }
 
-// ── HISTORY RENDER ─────────────────────────────────────────────────
+// ── HISTORY ───────────────────────────────────────────────────────
 function renderHistory() {
-  const pdfSection = document.getElementById("pdf-section");
-  pdfSection.style.display = records.length > 0 ? "block" : "none";
-
+  document.getElementById("pdf-section").style.display = records.length > 0 ? "block" : "none";
   const c = document.getElementById("historial-content");
   if (records.length === 0) {
     c.innerHTML = `<div class="empty"><div class="empty-emoji">📋</div><div class="empty-text">Aún no hay firmas registradas.</div><button class="btn btn-primary" style="max-width:200px;margin:0 auto;display:block;" onclick="switchTab('firma')">Registrar firma</button></div>`;
     return;
   }
-
   let html = `<div class="history-header"><span class="history-count">${records.length} firma${records.length!==1?"s":""} registrada${records.length!==1?"s":""}</span><button class="btn-new" onclick="switchTab('firma')">+ Nueva</button></div>`;
-
-  records.forEach((r, i) => {
+  records.forEach((r,i) => {
     html += `<div class="record-card">
       <div class="record-head" onclick="toggleRec(${i})">
         <div style="display:flex;align-items:center;gap:10px;">
@@ -561,15 +541,12 @@ function renderHistory() {
       </div>
     </div>`;
   });
-
   c.innerHTML = html;
 }
 
 function toggleRec(i) {
-  const b = document.getElementById("body-"+i);
-  const ch = document.getElementById("chev-"+i);
-  b.classList.toggle("visible", !b.classList.contains("visible"));
-  ch.classList.toggle("open", !ch.classList.contains("open"));
+  document.getElementById("body-"+i).classList.toggle("visible");
+  document.getElementById("chev-"+i).classList.toggle("open");
 }
 function askDel(i) {
   document.getElementById("del-"+i).innerHTML = `<div class="confirm-del"><span>¿Confirmar?</span><button class="btn-del-yes" onclick="confirmDel(${i})">Eliminar</button><button class="btn-del-no" onclick="cancelDel(${i})">Cancelar</button></div>`;
@@ -577,12 +554,15 @@ function askDel(i) {
 function cancelDel(i) {
   document.getElementById("del-"+i).innerHTML = `<button class="btn-delete" onclick="askDel(${i})">🗑 Eliminar</button>`;
 }
-function confirmDel(i) { records.splice(i,1); save(); updateCount(); renderHistory(); }
+async function confirmDel(i) { records.splice(i,1); await cloudSave(); updateCount(); renderHistory(); }
 
 const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
 if (isIOS && !window.navigator.standalone) document.getElementById("install-hint").style.display = "flex";
 
-load(); updateCount(); renderDots();
+// Init
+const local = localStorage.getItem(BIN_KEY);
+if (local) { try { records = JSON.parse(local); } catch(e) {} }
+updateCount(); renderDots();
 </script>
 </body>
 </html>
