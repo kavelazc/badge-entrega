@@ -228,64 +228,69 @@ let lastX = 0, lastY = 0;
 let ctx = null;
 
 // ── CLOUD STORAGE via JSONBin ─────────────────────────────────────
-
 const BIN_ID = "6a6a27c3da38895dfea074d0";
+const HEADERS_READ  = { "X-Master-Key": ANTHROPIC_API_KEY, "X-Bin-Meta": "false" };
+const HEADERS_WRITE = { "Content-Type": "application/json", "X-Master-Key": ANTHROPIC_API_KEY };
+const URL_BIN = `https://api.jsonbin.io/v3/b/${BIN_ID}`;
 
-// Cargar historial desde la nube
+// Leer bin crudo desde JSONBin
+async function binRead() {
+  const res = await fetch(URL_BIN + "/latest", { headers: HEADERS_READ });
+  if (!res.ok) throw new Error("read failed " + res.status);
+  const data = await res.json();
+  // JSONBin envuelve en { record: ... }
+  const r = data.record;
+  return Array.isArray(r) ? r : (Array.isArray(r.records) ? r.records : []);
+}
+
+// Escribir bin completo en JSONBin
+async function binWrite(arr) {
+  const res = await fetch(URL_BIN, {
+    method: "PUT",
+    headers: HEADERS_WRITE,
+    body: JSON.stringify(arr)
+  });
+  if (!res.ok) throw new Error("write failed " + res.status);
+}
+
+// Cargar historial al abrir pestaña historial o al refrescar
 async function cloudLoad() {
-  showStatus("Cargando historial…");
+  showStatus("Sincronizando…");
   try {
-    const res = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, {
-      headers: { "X-Master-Key": ANTHROPIC_API_KEY, "X-Bin-Meta": "false" }
-    });
-    if (res.ok) {
-      const data = await res.json();
-      records = Array.isArray(data.record) ? data.record : [];
-      localStorage.setItem(BIN_KEY, JSON.stringify(records));
-    }
-  } catch(e) {}
+    const cloud = await binRead();
+    records = cloud;
+    localStorage.setItem(BIN_KEY, JSON.stringify(records));
+  } catch(e) {
+    // Si falla la nube, usar localStorage como respaldo
+    const local = localStorage.getItem(BIN_KEY);
+    if (local) records = JSON.parse(local);
+  }
   hideStatus();
   updateCount();
   renderHistory();
 }
 
-// Guardar UN registro nuevo SIN borrar los anteriores
+// Agregar UN registro nuevo — lee primero, agrega, escribe
 async function cloudAddRecord(newRecord) {
+  showStatus("Guardando…");
   try {
-    // 1. Bajar historial actual de la nube
-    let cloudRecords = [];
-    const res = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, {
-      headers: { "X-Master-Key": ANTHROPIC_API_KEY, "X-Bin-Meta": "false" }
-    });
-    if (res.ok) {
-      const data = await res.json();
-      cloudRecords = Array.isArray(data.record) ? data.record : [];
-    }
-    // 2. Agregar el nuevo al inicio
-    const merged = [newRecord, ...cloudRecords];
-    // 3. Subir historial completo
-    await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json", "X-Master-Key": ANTHROPIC_API_KEY },
-      body: JSON.stringify(merged)
-    });
+    const cloud = await binRead();          // leer estado actual
+    const merged = [newRecord, ...cloud];   // agregar al inicio
+    await binWrite(merged);                 // escribir de vuelta
     records = merged;
     localStorage.setItem(BIN_KEY, JSON.stringify(records));
   } catch(e) {
-    // fallback local
+    // fallback: guardar solo en local
     records = [newRecord, ...records];
     localStorage.setItem(BIN_KEY, JSON.stringify(records));
   }
+  hideStatus();
 }
 
-// Guardar historial completo (para eliminar registros o limpiar)
+// Guardar historial completo (tras eliminar o limpiar PDF)
 async function cloudSave() {
   try {
-    await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json", "X-Master-Key": ANTHROPIC_API_KEY },
-      body: JSON.stringify(records)
-    });
+    await binWrite(records);
     localStorage.setItem(BIN_KEY, JSON.stringify(records));
   } catch(e) {
     localStorage.setItem(BIN_KEY, JSON.stringify(records));
@@ -553,10 +558,19 @@ async function confirmDel(i) { records.splice(i,1); await cloudSave(); updateCou
 const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
 if (isIOS && !window.navigator.standalone) document.getElementById("install-hint").style.display = "flex";
 
-// Init
-const local = localStorage.getItem(BIN_KEY);
-if (local) { try { records = JSON.parse(local); } catch(e) {} }
-updateCount(); renderDots();
+// Init — cargar desde localStorage primero (respaldo rápido), luego sincronizar con nube
+(async () => {
+  try { const l = localStorage.getItem(BIN_KEY); if (l) records = JSON.parse(l); } catch(e) {}
+  updateCount();
+  renderDots();
+  // Pre-cargar historial de la nube en segundo plano
+  try {
+    const cloud = await binRead();
+    records = cloud;
+    localStorage.setItem(BIN_KEY, JSON.stringify(records));
+    updateCount();
+  } catch(e) {}
+})();
 </script>
 </body>
 </html>
