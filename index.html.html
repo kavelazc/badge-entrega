@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Entrega de Badge · Mercado Libre</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f3f4f6; min-height: 100vh; -webkit-font-smoothing: antialiased; }
+
+  /* HEADER */
+  .header { background: #1a1a2e; padding: 18px 16px 14px; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 10px rgba(0,0,0,0.3); }
+  .header-top { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+  .header-subtitle { color: #FFE600; font-size: 10px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; }
+  .header-title { color: #fff; font-size: 17px; font-weight: 700; }
+  .tabs { display: flex; background: rgba(255,255,255,0.1); border-radius: 10px; padding: 3px; gap: 2px; }
+  .tab { flex: 1; padding: 10px 6px; border: none; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600; transition: all 0.2s; background: transparent; color: rgba(255,255,255,0.65); }
+  .tab.active { background: #FFE600; color: #1a1a2e; }
+
+  /* CONTENT */
+  .content { padding: 18px 14px 60px; }
+  .card { background: #fff; border-radius: 16px; padding: 20px; box-shadow: 0 2px 12px rgba(0,0,0,0.07); }
+
+  /* STEP DOTS */
+  .steps { display: flex; justify-content: center; gap: 6px; margin-bottom: 22px; }
+  .dot { height: 8px; border-radius: 4px; transition: all 0.3s; }
+  .dot.done { width: 8px; background: #00A650; cursor: pointer; }
+  .dot.active { width: 28px; background: #FFE600; }
+  .dot.pending { width: 8px; background: #e5e7eb; }
+
+  /* FORM ELEMENTS */
+  .step-title { font-size: 16px; font-weight: 700; color: #1a1a2e; margin-bottom: 4px; }
+  .step-sub { font-size: 12px; color: #6b7280; margin-bottom: 16px; }
+  label { display: block; font-size: 12px; font-weight: 600; color: #374151; margin-bottom: 6px; margin-top: 14px; }
+  label:first-of-type { margin-top: 0; }
+  input, select { width: 100%; border: 1.5px solid #d1d5db; border-radius: 8px; padding: 12px; font-size: 14px; color: #1a1a2e; outline: none; background: #fff; font-family: inherit; -webkit-appearance: none; appearance: none; }
+  input:focus, select:focus { border-color: #FFE600; box-shadow: 0 0 0 3px rgba(255,230,0,0.15); }
+  .badge-wrap { display: flex; align-items: center; gap: 8px; background: #fffbeb; border: 1.5px solid #FFE600; border-radius: 8px; padding: 10px 12px; }
+  .badge-wrap input { border: none; background: transparent; padding: 0; font-size: 15px; font-weight: 600; letter-spacing: 1px; box-shadow: none; }
+  .badge-wrap input:focus { border: none; box-shadow: none; }
+  .select-wrap { position: relative; }
+  .select-wrap::after { content: "▾"; position: absolute; right: 14px; top: 50%; transform: translateY(-50%); color: #6b7280; pointer-events: none; font-size: 12px; }
+
+  /* BUTTONS */
+  .btn { width: 100%; padding: 14px; border: none; border-radius: 10px; font-size: 15px; font-weight: 700; cursor: pointer; font-family: inherit; transition: opacity 0.15s; }
+  .btn:active { opacity: 0.85; }
+  .btn-primary { background: #FFE600; color: #1a1a2e; margin-top: 18px; }
+  .btn-dark { background: #1a1a2e; color: #FFE600; }
+  .btn-disabled { background: #e5e7eb; color: #9ca3af; cursor: not-allowed; margin-top: 18px; }
+  .btn-secondary { padding: 14px 18px; background: #f3f4f6; color: #374151; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit; }
+  .btn-row { display: flex; gap: 10px; margin-top: 16px; }
+  .btn-row .btn { margin-top: 0; }
+  .btn-flex { flex: 1; }
+
+  /* AGREEMENT */
+  .agreement-box { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px; max-height: 340px; overflow-y: auto; font-size: 12.5px; line-height: 1.75; color: #374151; -webkit-overflow-scrolling: touch; }
+  .agreement-box h2 { text-align: center; font-size: 13px; font-weight: 700; color: #1a1a2e; margin-bottom: 12px; }
+  .agreement-box ol, .agreement-box ul { padding-left: 18px; margin-bottom: 10px; }
+  .agreement-box li { margin-bottom: 4px; }
+  .agreement-box p { margin-bottom: 10px; }
+  .agreement-box .section-title { font-weight: 700; margin-bottom: 6px; }
+
+  /* SIGNATURE */
+  .sig-wrap { position: relative; width: 100%; }
+  canvas { border: 1.5px solid #d1d5db; border-radius: 10px; display: block; width: 100%; touch-action: none; cursor: crosshair; background: #f8f9fa; }
+  .sig-hint { font-size: 11px; color: #9ca3af; margin-top: 5px; text-align: center; }
+  .btn-clear { position: absolute; top: 8px; right: 8px; background: rgba(255,255,255,0.92); border: 1px solid #e5e7eb; border-radius: 6px; font-size: 11px; color: #6b7280; padding: 4px 10px; cursor: pointer; font-family: inherit; }
+
+  /* CONFIRM BANNER */
+  .confirm-banner { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px; padding: 10px 12px; margin-bottom: 14px; font-size: 12px; color: #166534; }
+
+  /* SUCCESS */
+  .success-screen { text-align: center; padding: 44px 20px; }
+  .success-emoji { font-size: 52px; margin-bottom: 12px; }
+  .success-title { color: #00A650; font-weight: 700; font-size: 18px; margin-bottom: 6px; }
+  .success-sub { color: #6b7280; font-size: 13px; }
+
+  /* HISTORY */
+  .history-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+  .history-count { font-weight: 700; font-size: 14px; color: #1a1a2e; }
+  .btn-new { background: #FFE600; border: none; border-radius: 8px; padding: 8px 14px; font-weight: 700; font-size: 13px; color: #1a1a2e; cursor: pointer; font-family: inherit; }
+  .record-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; margin-bottom: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.05); }
+  .record-head { padding: 12px 14px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; }
+  .record-avatar { width: 38px; height: 38px; border-radius: 50%; background: #1a1a2e; color: #FFE600; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; flex-shrink: 0; }
+  .record-name { font-weight: 700; font-size: 14px; color: #1a1a2e; }
+  .record-meta { font-size: 11px; color: #6b7280; margin-top: 2px; }
+  .record-right { display: flex; align-items: center; gap: 6px; }
+  .check-icon { width: 16px; height: 16px; }
+  .chevron { color: #9ca3af; font-size: 16px; transition: transform 0.2s; display: inline-block; }
+  .chevron.open { transform: rotate(180deg); }
+  .record-body { border-top: 1px solid #f3f4f6; padding: 12px 14px; background: #fafafa; display: none; }
+  .record-body.visible { display: block; }
+  .record-date { font-size: 11px; color: #9ca3af; margin-bottom: 8px; }
+  .record-sig { max-width: 220px; width: 100%; border: 1px solid #e5e7eb; border-radius: 8px; display: block; margin-bottom: 10px; }
+  .btn-delete { background: none; border: 1px solid #fca5a5; border-radius: 6px; color: #ef4444; font-size: 11px; padding: 5px 10px; cursor: pointer; font-family: inherit; }
+  .confirm-del { display: flex; gap: 8px; align-items: center; }
+  .confirm-del span { font-size: 11px; color: #6b7280; }
+  .btn-del-yes { background: #ef4444; border: none; border-radius: 6px; color: #fff; font-size: 11px; padding: 5px 10px; cursor: pointer; font-family: inherit; }
+  .btn-del-no { background: #f3f4f6; border: none; border-radius: 6px; color: #374151; font-size: 11px; padding: 5px 10px; cursor: pointer; font-family: inherit; }
+
+  /* EMPTY */
+  .empty { text-align: center; padding: 60px 20px; }
+  .empty-emoji { font-size: 46px; margin-bottom: 12px; }
+  .empty-text { color: #9ca3af; font-size: 14px; margin-bottom: 16px; }
+
+  /* LOADING */
+  .loading { text-align: center; padding: 60px 20px; color: #9ca3af; font-size: 14px; }
+  .footer-note { text-align: center; font-size: 10px; color: #c4c4c4; margin-top: 16px; }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="header-top">
+    <svg width="24" height="24" viewBox="0 0 22 22" fill="none">
+      <rect x="3" y="1" width="16" height="20" rx="2" stroke="#FFE600" stroke-width="1.8"/>
+      <circle cx="11" cy="8" r="3" stroke="#FFE600" stroke-width="1.5"/>
+      <path d="M6 17c0-2.761 2.239-5 5-5s5 2.239 5 5" stroke="#FFE600" stroke-width="1.5" stroke-linecap="round"/>
+      <rect x="8" y="1" width="6" height="2.5" rx="1" fill="#FFE600"/>
+    </svg>
+    <div>
+      <div class="header-subtitle">Mercado Libre · Loss Prevention</div>
+      <div class="header-title">Entrega de Badge</div>
+    </div>
+  </div>
+  <div class="tabs">
+    <button class="tab active" id="tab-firma" onclick="switchTab('firma')">✍️ Firmar</button>
+    <button class="tab" id="tab-historial" onclick="switchTab('historial')">📋 Historial</button>
+  </div>
+</div>
+
+<!-- CONTENT -->
+<div class="content">
+
+  <!-- FIRMA PANEL -->
+  <div id="panel-firma" class="card">
+
+    <!-- Step dots -->
+    <div class="steps" id="step-dots"></div>
+
+    <!-- Step 1: Datos -->
+    <div id="step1">
+      <div class="step-title">Datos del colaborador</div>
+      <div class="step-sub">Completa tu información antes de continuar.</div>
+      <label>Nombre completo</label>
+      <input type="text" id="inp-nombre" placeholder="Ej. Juan Pérez López" oninput="validateStep1()">
+      <label>Badge asignado</label>
+      <div class="badge-wrap">
+        <svg width="20" height="20" viewBox="0 0 22 22" fill="none">
+          <rect x="3" y="1" width="16" height="20" rx="2" stroke="#1a1a2e" stroke-width="1.8"/>
+          <circle cx="11" cy="8" r="3" stroke="#1a1a2e" stroke-width="1.5"/>
+          <path d="M6 17c0-2.761 2.239-5 5-5s5 2.239 5 5" stroke="#1a1a2e" stroke-width="1.5" stroke-linecap="round"/>
+          <rect x="8" y="1" width="6" height="2.5" rx="1" fill="#1a1a2e"/>
+        </svg>
+        <input type="text" id="inp-badge" placeholder="Número de badge" maxlength="12" oninput="validateStep1()" style="margin-top:0;">
+      </div>
+      <label>Departamento</label>
+      <div class="select-wrap">
+        <select id="inp-depto" onchange="validateStep1()">
+          <option value="">Selecciona departamento…</option>
+          <option>Inbound</option><option>Outbound</option><option>Middle Mile</option>
+          <option>Cross Docking</option><option>Inventory</option><option>Quality</option>
+          <option>IT</option><option>Seguridad</option><option>Loss Prevention</option>
+          <option>Recursos Humanos</option><option>Operaciones</option><option>Administración</option>
+        </select>
+      </div>
+      <button class="btn btn-disabled" id="btn-step1" onclick="goStep(2)" disabled>Continuar →</button>
+    </div>
+
+    <!-- Step 2: Acuerdo -->
+    <div id="step2" style="display:none;">
+      <div class="step-title">Acuerdo de responsabilidad</div>
+      <div class="step-sub">Lee con atención antes de firmar.</div>
+      <div class="agreement-box">
+        <h2>CARTA ENTREGA - RECEPCIÓN DE BADGE</h2>
+        <p>Por medio de la presente, hago constar que el Área de <strong>Loss Prevention</strong> de Mercado Libre, me hizo entrega de <strong>01 credencial/Badge</strong> en reposición por el extravío/dañado del siguiente personal que está laborando y fue contratado por medio de la Agencia <strong>Adecco</strong>. A continuación se explicará la función de las credenciales:</p>
+        <p class="section-title">Funciones de la credencial:</p>
+        <ol>
+          <li>Será su llave de acceso y salida del site.</li>
+          <li>Deberá pasar la tarjeta cada vez que salga y regrese al FC (ir al sanitario, lockers y hora de alimentos).</li>
+          <li>En caso de extravío contactar a Loss Prevention.</li>
+          <li>Se realizará un cobro en caso de requerir una reposición.</li>
+        </ol>
+        <p class="section-title">Cuidados del Badge</p>
+        <p>Para garantizar el correcto funcionamiento del gafete, me comprometo a:</p>
+        <ul>
+          <li>Mantenerlo limpio y seco.</li>
+          <li>No doblarlo ni perforarlo.</li>
+          <li>No exponerlo a temperaturas extremas o a la luz solar de forma prolongada.</li>
+          <li>Evitar que entre en contacto con agua, aceites, solventes o productos químicos.</li>
+          <li>No colocarlo junto a objetos punzocortantes que puedan rayarlo o romperlo.</li>
+          <li>No intentar repararlo o manipular sus componentes.</li>
+        </ul>
+        <p class="section-title">Responsabilidad por Pérdida o Daño</p>
+        <p>Reconozco que el badge constituye un medio de identificación y control de acceso propiedad de la empresa. En caso de pérdida, robo o daño ocasionado por negligencia o uso inadecuado, me comprometo a reportarlo inmediatamente y aceptar el costo total de la reposición del mismo conforme a las políticas internas.</p>
+        <p class="section-title">Declaración</p>
+        <p>Declaro haber recibido el badge en buenas condiciones, haber leído y comprendido el presente acuerdo, así como aceptar las responsabilidades y cuidados descritos anteriormente.</p>
+      </div>
+      <div class="btn-row">
+        <button class="btn-secondary" onclick="goStep(1)">← Atrás</button>
+        <button class="btn btn-primary btn-flex" style="margin-top:0;" onclick="goStep(3)">Aceptar y firmar →</button>
+      </div>
+    </div>
+
+    <!-- Step 3: Firma -->
+    <div id="step3" style="display:none;">
+      <div class="step-title">Firma del colaborador</div>
+      <div class="confirm-banner" id="confirm-banner"></div>
+      <div class="sig-wrap">
+        <canvas id="sig-canvas"></canvas>
+        <button class="btn-clear" onclick="clearCanvas()">✕ Limpiar</button>
+      </div>
+      <div class="sig-hint">Firma con el dedo dentro del recuadro</div>
+      <div class="btn-row" style="margin-top:16px;">
+        <button class="btn-secondary" onclick="goStep(2)">← Atrás</button>
+        <button class="btn btn-dark btn-flex btn-disabled" id="btn-submit" onclick="submitFirma()" disabled>✓ Confirmar firma</button>
+      </div>
+    </div>
+
+    <!-- Success -->
+    <div id="step-done" style="display:none;" class="success-screen">
+      <div class="success-emoji">✅</div>
+      <div class="success-title">¡Firma registrada!</div>
+      <div class="success-sub">El acuerdo fue firmado y guardado correctamente.</div>
+    </div>
+
+  </div><!-- /card -->
+
+  <!-- HISTORIAL PANEL -->
+  <div id="panel-historial" style="display:none;">
+    <div id="historial-loading" class="loading">Cargando historial…</div>
+    <div id="historial-content" style="display:none;"></div>
+  </div>
+
+</div><!-- /content -->
+
+<script>
+// ── State ──────────────────────────────────────────────────────────
+const STORAGE_KEY = "ml-badge-firmas-v1";
+let records = [];
+let currentStep = 1;
+let sigHasContent = false;
+let activeTab = "firma";
+
+// ── Storage (localStorage — works offline in any browser) ──────────
+function saveRecords() {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(records)); } catch(e) {}
+}
+function loadRecords() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) records = JSON.parse(raw);
+  } catch(e) { records = []; }
+}
+
+// ── Tabs ───────────────────────────────────────────────────────────
+function switchTab(tab) {
+  activeTab = tab;
+  document.getElementById("panel-firma").style.display = tab === "firma" ? "block" : "none";
+  document.getElementById("panel-historial").style.display = tab === "historial" ? "block" : "none";
+  document.getElementById("tab-firma").className = "tab" + (tab === "firma" ? " active" : "");
+  document.getElementById("tab-historial").className = "tab" + (tab === "historial" ? " active" : "");
+  updateTabCount();
+  if (tab === "historial") renderHistory();
+}
+
+function updateTabCount() {
+  const btn = document.getElementById("tab-historial");
+  btn.textContent = records.length > 0 ? `📋 Historial (${records.length})` : "📋 Historial";
+}
+
+// ── Steps ──────────────────────────────────────────────────────────
+function renderDots() {
+  const c = document.getElementById("step-dots");
+  c.innerHTML = [1,2,3].map(s => {
+    let cls = s < currentStep ? "dot done" : s === currentStep ? "dot active" : "dot pending";
+    let click = s < currentStep ? `onclick="goStep(${s})"` : "";
+    return `<div class="${cls}" ${click}></div>`;
+  }).join("");
+}
+
+function goStep(n) {
+  currentStep = n;
+  ["step1","step2","step3","step-done"].forEach(id => {
+    document.getElementById(id).style.display = "none";
+  });
+  if (n <= 3) document.getElementById("step"+n).style.display = "block";
+  renderDots();
+  if (n === 3) {
+    const nombre = document.getElementById("inp-nombre").value.trim();
+    const badge = document.getElementById("inp-badge").value.trim();
+    const depto = document.getElementById("inp-depto").value;
+    document.getElementById("confirm-banner").innerHTML = `<strong>${nombre}</strong> · Badge: ${badge} · ${depto}`;
+    initCanvas();
+  }
+}
+
+// ── Validation ─────────────────────────────────────────────────────
+function validateStep1() {
+  const ok = document.getElementById("inp-nombre").value.trim() &&
+             document.getElementById("inp-badge").value.trim() &&
+             document.getElementById("inp-depto").value;
+  const btn = document.getElementById("btn-step1");
+  btn.disabled = !ok;
+  btn.className = "btn " + (ok ? "btn-primary" : "btn-disabled");
+}
+
+function validateSubmit() {
+  const btn = document.getElementById("btn-submit");
+  btn.disabled = !sigHasContent;
+  btn.className = "btn btn-dark btn-flex" + (sigHasContent ? "" : " btn-disabled");
+}
+
+// ── Canvas Signature ───────────────────────────────────────────────
+let isDrawing = false;
+let lastX = 0, lastY = 0;
+let ctx = null;
+
+function initCanvas() {
+  const canvas = document.getElementById("sig-canvas");
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.parentElement.clientWidth;
+  const h = 130;
+  canvas.width = w * dpr;
+  canvas.height = h * dpr;
+  canvas.style.width = w + "px";
+  canvas.style.height = h + "px";
+  ctx = canvas.getContext("2d");
+  ctx.scale(dpr, dpr);
+  ctx.fillStyle = "#f8f9fa";
+  ctx.fillRect(0, 0, w, h);
+  sigHasContent = false;
+  validateSubmit();
+}
+
+function getXY(e, canvas) {
+  const rect = canvas.getBoundingClientRect();
+  const src = e.touches ? e.touches[0] : e;
+  return { x: src.clientX - rect.left, y: src.clientY - rect.top };
+}
+
+function clearCanvas() {
+  const canvas = document.getElementById("sig-canvas");
+  initCanvas();
+}
+
+document.addEventListener("mousedown", function(e) {
+  if (e.target.id !== "sig-canvas") return;
+  isDrawing = true;
+  const p = getXY(e, e.target); lastX = p.x; lastY = p.y;
+}, { passive: false });
+
+document.addEventListener("mousemove", function(e) {
+  if (!isDrawing || e.target.id !== "sig-canvas") return;
+  e.preventDefault();
+  const p = getXY(e, e.target);
+  ctx.beginPath(); ctx.moveTo(lastX, lastY); ctx.lineTo(p.x, p.y);
+  ctx.strokeStyle = "#1a1a2e"; ctx.lineWidth = 2.2; ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.stroke();
+  lastX = p.x; lastY = p.y;
+  sigHasContent = true; validateSubmit();
+}, { passive: false });
+
+document.addEventListener("mouseup", function() { isDrawing = false; }, { passive: false });
+
+document.addEventListener("touchstart", function(e) {
+  if (e.target.id !== "sig-canvas") return;
+  e.preventDefault(); isDrawing = true;
+  const p = getXY(e, e.target); lastX = p.x; lastY = p.y;
+}, { passive: false });
+
+document.addEventListener("touchmove", function(e) {
+  if (!isDrawing || e.target.id !== "sig-canvas") return;
+  e.preventDefault();
+  const p = getXY(e, e.target);
+  ctx.beginPath(); ctx.moveTo(lastX, lastY); ctx.lineTo(p.x, p.y);
+  ctx.strokeStyle = "#1a1a2e"; ctx.lineWidth = 2.2; ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.stroke();
+  lastX = p.x; lastY = p.y;
+  sigHasContent = true; validateSubmit();
+}, { passive: false });
+
+document.addEventListener("touchend", function() { isDrawing = false; }, { passive: false });
+
+// ── Submit ─────────────────────────────────────────────────────────
+function submitFirma() {
+  if (!sigHasContent) return;
+  const canvas = document.getElementById("sig-canvas");
+  const now = new Date();
+  const fecha = now.toLocaleDateString("es-MX", { day:"2-digit", month:"long", year:"numeric", hour:"2-digit", minute:"2-digit" });
+  const nombre = document.getElementById("inp-nombre").value.trim();
+  const initials = nombre.split(" ").filter(Boolean).slice(0,2).map(w => w[0].toUpperCase()).join("");
+  const record = {
+    nombre, initials,
+    badge: document.getElementById("inp-badge").value.trim(),
+    departamento: document.getElementById("inp-depto").value,
+    firma: canvas.toDataURL("image/png"),
+    fecha
+  };
+  records.unshift(record);
+  saveRecords();
+  updateTabCount();
+
+  // Show success
+  document.getElementById("step3").style.display = "none";
+  document.getElementById("step-done").style.display = "block";
+  document.getElementById("step-dots").innerHTML = "";
+
+  setTimeout(() => {
+    // Reset
+    document.getElementById("inp-nombre").value = "";
+    document.getElementById("inp-badge").value = "";
+    document.getElementById("inp-depto").value = "";
+    sigHasContent = false;
+    currentStep = 1;
+    document.getElementById("step-done").style.display = "none";
+    goStep(1);
+    switchTab("historial");
+  }, 2200);
+}
+
+// ── History ────────────────────────────────────────────────────────
+function renderHistory() {
+  document.getElementById("historial-loading").style.display = "none";
+  const c = document.getElementById("historial-content");
+  c.style.display = "block";
+
+  if (records.length === 0) {
+    c.innerHTML = `
+      <div class="empty">
+        <div class="empty-emoji">📋</div>
+        <div class="empty-text">Aún no hay firmas registradas.</div>
+        <button class="btn btn-primary" style="max-width:200px;margin:0 auto;display:block;" onclick="switchTab('firma')">Registrar firma</button>
+      </div>`;
+    return;
+  }
+
+  let html = `<div class="history-header">
+    <span class="history-count">${records.length} firma${records.length !== 1 ? "s" : ""} registrada${records.length !== 1 ? "s" : ""}</span>
+    <button class="btn-new" onclick="switchTab('firma')">+ Nueva</button>
+  </div>`;
+
+  records.forEach((r, i) => {
+    html += `
+    <div class="record-card" id="rec-${i}">
+      <div class="record-head" onclick="toggleRecord(${i})">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div class="record-avatar">${r.initials || r.nombre.charAt(0)}</div>
+          <div>
+            <div class="record-name">${r.nombre}</div>
+            <div class="record-meta">${r.departamento} · Badge: <strong>${r.badge}</strong></div>
+          </div>
+        </div>
+        <div class="record-right">
+          <svg class="check-icon" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="8" fill="#00A650"/><path d="M4.5 8L7 10.5L11.5 6" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span class="chevron" id="chev-${i}">▾</span>
+        </div>
+      </div>
+      <div class="record-body" id="body-${i}">
+        <div class="record-date">🕐 ${r.fecha}</div>
+        <img src="${r.firma}" class="record-sig" alt="Firma de ${r.nombre}">
+        <div id="del-${i}">
+          <button class="btn-delete" onclick="askDelete(${i})">🗑 Eliminar registro</button>
+        </div>
+      </div>
+    </div>`;
+  });
+
+  html += `<div class="footer-note">Las firmas se guardan localmente en este dispositivo.</div>`;
+  c.innerHTML = html;
+}
+
+function toggleRecord(i) {
+  const body = document.getElementById("body-"+i);
+  const chev = document.getElementById("chev-"+i);
+  const open = body.classList.contains("visible");
+  body.classList.toggle("visible", !open);
+  chev.classList.toggle("open", !open);
+}
+
+function askDelete(i) {
+  document.getElementById("del-"+i).innerHTML = `
+    <div class="confirm-del">
+      <span>¿Confirmar eliminación?</span>
+      <button class="btn-del-yes" onclick="confirmDelete(${i})">Eliminar</button>
+      <button class="btn-del-no" onclick="cancelDelete(${i})">Cancelar</button>
+    </div>`;
+}
+
+function cancelDelete(i) {
+  document.getElementById("del-"+i).innerHTML = `<button class="btn-delete" onclick="askDelete(${i})">🗑 Eliminar registro</button>`;
+}
+
+function confirmDelete(i) {
+  records.splice(i, 1);
+  saveRecords();
+  updateTabCount();
+  renderHistory();
+}
+
+// ── Init ───────────────────────────────────────────────────────────
+loadRecords();
+updateTabCount();
+renderDots();
+</script>
+</body>
+</html>
